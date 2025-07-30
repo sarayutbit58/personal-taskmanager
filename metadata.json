@@ -1,0 +1,6 @@
+{
+  "name": "FocusFlow - Task & Project Manager",
+  "description": "A task and project management application designed for focus. Manage your workflow with an interactive dashboard, persist tasks locally, and use focus mode to highlight priorities. Includes data import/export functionality.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
