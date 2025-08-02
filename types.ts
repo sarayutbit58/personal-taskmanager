@@ -27,7 +27,6 @@ export interface Task {
   startDate: string | null;
   dueDate: string | null;
   tags: string[];
-  dependencies: string[]; // ids of tasks that must be complete before this one
   isFocused: boolean;
   createdAt: string;
   order: number;

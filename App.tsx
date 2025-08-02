@@ -128,43 +128,73 @@ const App: React.FC = () => {
     };
     
     // Task Handlers
-    const handleSaveTask = (taskData: Omit<Task, 'id' | 'projectId' | 'parentId' | 'isFocused' | 'createdAt' | 'order'>) => {
-        setState(current => {
-            let projectId: string;
-            let logAction: string;
-            let updatedTasks: Task[];
-
-            if (modalState.type === 'EDIT_TASK') {
-                const originalTask = modalState.task;
-                projectId = originalTask.projectId;
-                logAction = `edited task "${taskData.title}".`;
-                updatedTasks = current.tasks.map(t => t.id === originalTask.id ? { ...originalTask, ...taskData } : t);
-            } else if (modalState.type === 'CREATE_TASK') {
-                projectId = modalState.projectId;
-                logAction = `created task "${taskData.title}".`;
-                const siblingTasks = current.tasks.filter(t => t.projectId === projectId && t.parentId === (modalState.parentId || null));
-                const newTask: Task = {
-                    id: `task_${Date.now()}`,
-                    projectId: projectId,
-                    parentId: modalState.parentId || null,
-                    isFocused: false,
-                    createdAt: new Date().toISOString(),
-                    order: (siblingTasks.reduce((max, t) => Math.max(t.order, max), -1) + 1),
-                    ...taskData,
-                };
-                updatedTasks = [...current.tasks, newTask];
-            } else {
-                return current;
-            }
+    const handleSaveTask = (
+      taskData: Omit<Task, 'id' | 'projectId' | 'parentId' | 'isFocused' | 'createdAt' | 'order'>,
+      newProjectId: string,
+      newParentId: string | null
+    ) => {
+      setState(current => {
+        let logAction: string;
+        let finalTasks: Task[];
+        let finalActivityLog = { ...current.activityLog };
+        
+        if (modalState.type === 'EDIT_TASK') {
+          const originalTask = modalState.task;
+          logAction = `edited task "${taskData.title}".`;
+    
+          const hasMoved = originalTask.projectId !== newProjectId || originalTask.parentId !== newParentId;
+          const taskWithData = { ...originalTask, ...taskData };
+    
+          if (hasMoved) {
+            const tempTask = { ...taskWithData, projectId: newProjectId, parentId: newParentId };
+            const otherTasks = current.tasks.filter(t => t.id !== originalTask.id);
             
-            const log = createActivityLog(projectId, logAction);
-            return { 
-                ...current, 
-                tasks: updatedTasks,
-                activityLog: { ...current.activityLog, [projectId]: [...(current.activityLog[projectId] || []), log] }
-            };
-        });
-        setModalState({ type: 'CLOSED' });
+            const oldSiblings = otherTasks
+              .filter(t => t.projectId === originalTask.projectId && t.parentId === originalTask.parentId)
+              .sort((a, b) => a.order - b.order)
+              .map((t, index) => ({ ...t, order: index }));
+            const oldSiblingMap = new Map(oldSiblings.map(t => [t.id, t]));
+            
+            const newSiblings = otherTasks.filter(t => t.projectId === newProjectId && t.parentId === newParentId);
+            const taskWithNewOrder = { ...tempTask, order: newSiblings.length };
+
+            finalTasks = otherTasks.map(t => oldSiblingMap.get(t.id) || t);
+            finalTasks.push(taskWithNewOrder);
+
+            if (originalTask.projectId !== newProjectId) {
+                const logMove = createActivityLog(newProjectId, `moved task "${taskData.title}" into this project.`);
+                finalActivityLog[newProjectId] = [...(finalActivityLog[newProjectId] || []), logMove];
+            }
+          } else {
+            finalTasks = current.tasks.map(t => t.id === originalTask.id ? taskWithData : t);
+          }
+           
+          const logEdit = createActivityLog(originalTask.projectId, logAction);
+          finalActivityLog[originalTask.projectId] = [...(finalActivityLog[originalTask.projectId] || []), logEdit];
+
+          return { ...current, tasks: finalTasks, activityLog: finalActivityLog };
+
+        } else if (modalState.type === 'CREATE_TASK') {
+          logAction = `created task "${taskData.title}".`;
+          const siblingTasks = current.tasks.filter(t => t.projectId === newProjectId && t.parentId === newParentId);
+          const newTask: Task = {
+            id: `task_${Date.now()}`,
+            projectId: newProjectId,
+            parentId: newParentId,
+            isFocused: false,
+            createdAt: new Date().toISOString(),
+            order: (siblingTasks.reduce((max, t) => Math.max(t.order, max), -1) + 1),
+            ...taskData,
+          };
+          finalTasks = [...current.tasks, newTask];
+          const log = createActivityLog(newProjectId, logAction);
+          finalActivityLog[newProjectId] = [...(finalActivityLog[newProjectId] || []), log];
+          return { ...current, tasks: finalTasks, activityLog: finalActivityLog };
+        } else {
+          return current;
+        }
+      });
+      setModalState({ type: 'CLOSED' });
     };
 
     const handleDeleteTask = (taskId: string) => {
@@ -194,13 +224,6 @@ const App: React.FC = () => {
     const handleUpdateTaskStatus = (taskId: string, status: TaskStatus) => {
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || task.status === status) return;
-        if (status !== TaskStatus.ToDo) {
-            const isBlocked = task.dependencies.some(depId => state.tasks.find(t => t.id === depId)?.status !== TaskStatus.Done);
-            if (isBlocked) {
-                alert("This task is blocked by one or more incomplete dependencies.");
-                return;
-            }
-        }
         setState(current => {
             const log = createActivityLog(task.projectId, `changed status of task "${task.title}" to ${status}.`);
             return {
@@ -211,29 +234,27 @@ const App: React.FC = () => {
         });
     };
 
-    const handleReorder = <T extends {id: string, order: number}>(draggedId: string, targetId: string, list: T[]): T[] => {
+    const handleReorder = <T extends {id: string, order: number}>(draggedId: string, targetId: string, list: T[], position: 'top' | 'bottom' = 'top'): T[] => {
         const draggedItem = list.find(p => p.id === draggedId);
-        const targetItem = list.find(p => p.id === targetId);
-        if (!draggedItem || !targetItem) return list;
-        const reorderedList = list.filter(p => p.id !== draggedId).sort((a,b) => a.order - b.order);
-        const targetIndex = reorderedList.findIndex(p => p.id === targetId);
+        if (!draggedItem) return list;
+
+        const reorderedList = list
+            .filter(p => p.id !== draggedId)
+            .sort((a, b) => a.order - b.order);
+
+        let targetIndex = reorderedList.findIndex(p => p.id === targetId);
+        if (targetIndex === -1) return list;
+        
+        if (position === 'bottom') {
+            targetIndex++;
+        }
+        
         reorderedList.splice(targetIndex, 0, draggedItem);
-        const updatedList = reorderedList.map((item, index) => ({...item, order: index}));
-        return list.map(item => updatedList.find(u => u.id === item.id) || item);
+        
+        return reorderedList.map((item, index) => ({...item, order: index}));
     };
     
     const handleReorderProjects = (draggedId: string, targetId: string) => setState(current => ({ ...current, projects: handleReorder(draggedId, targetId, current.projects)}));
-    const handleReorderTasks = (draggedId: string, targetId: string) => {
-        setState(current => {
-            const draggedTask = current.tasks.find(t => t.id === draggedId);
-            const targetTask = current.tasks.find(t => t.id === targetId);
-            if (!draggedTask || !targetTask || draggedTask.parentId !== targetTask.parentId) return current;
-            const siblings = current.tasks.filter(t => t.parentId === draggedTask.parentId);
-            const otherTasks = current.tasks.filter(t => t.parentId !== draggedTask.parentId);
-            const reorderedSiblings = handleReorder(draggedId, targetId, siblings);
-            return {...current, tasks: [...otherTasks, ...reorderedSiblings]};
-        });
-    };
     
     // New Feature Handlers
     const handleAddComment = (projectId: string, content: string) => {
@@ -304,9 +325,17 @@ const App: React.FC = () => {
         switch (modalState.type) {
             case 'CREATE_PROJECT': return <ProjectForm onSave={handleSaveProject} />;
             case 'EDIT_PROJECT': return <ProjectForm onSave={handleSaveProject} projectToEdit={modalState.project} />;
-            case 'CREATE_TASK': case 'EDIT_TASK':
-                const project = state.projects.find(p => p.id === (modalState.type === 'CREATE_TASK' ? modalState.projectId : modalState.task.projectId));
-                return <TaskForm onSave={handleSaveTask} taskToEdit={modalState.type === 'EDIT_TASK' ? modalState.task : undefined} projectTasks={project ? state.tasks.filter(t => t.projectId === project.id) : []} />;
+            case 'CREATE_TASK':
+            case 'EDIT_TASK':
+                const isEdit = modalState.type === 'EDIT_TASK';
+                return <TaskForm 
+                    onSave={handleSaveTask} 
+                    taskToEdit={isEdit ? modalState.task : undefined}
+                    allProjects={state.projects}
+                    allTasks={state.tasks}
+                    contextProjectId={isEdit ? undefined : modalState.projectId}
+                    contextParentId={isEdit ? undefined : modalState.parentId}
+                />;
             case 'CONFIRM_DELETE_PROJECT': return (
                 <div>
                     <p className="text-on-surface-secondary mb-6">Delete "<strong>{modalState.project.name}</strong>"? This also deletes all its tasks and cannot be undone.</p>
@@ -360,7 +389,6 @@ const App: React.FC = () => {
                 onEditTask={(task) => setModalState({ type: 'EDIT_TASK', task })}
                 onToggleTaskFocus={(taskId) => setState(current => ({ ...current, tasks: current.tasks.map(t => t.id === taskId ? { ...t, isFocused: !t.isFocused } : t)}))}
                 onAddSubTask={(parentTask) => setModalState({ type: 'CREATE_TASK', projectId: parentTask.projectId, parentId: parentTask.id })}
-                onReorderTasks={handleReorderTasks}
                 onReorderProject={handleReorderProjects}
                 onAddComment={handleAddComment}
                 onBulkDelete={handleBulkDelete}

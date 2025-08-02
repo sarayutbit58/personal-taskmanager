@@ -21,7 +21,6 @@ interface ProjectCardProps {
   onEditTask: (task: Task) => void;
   onToggleTaskFocus: (taskId: string) => void;
   onAddSubTask: (parentTask: Task) => void;
-  onReorderTasks: (draggedId: string, targetId: string) => void;
   onReorderProject: (draggedId: string, targetId: string) => void;
   onAddComment: (projectId: string, content: string) => void;
 }
@@ -49,14 +48,6 @@ const GanttLegend: React.FC = () => (
             </div>
             <span>Task Progress</span>
         </div>
-         <div className="flex items-center gap-2">
-            <svg width="24" height="12" viewBox="0 0 24 12" className="overflow-visible">
-                <path d="M2,6 L18,6" stroke="#0ea5e9" strokeWidth="2" fill="none"/>
-                <path d="M18,6 L13,3" stroke="#0ea5e9" strokeWidth="2" fill="none"/>
-                <path d="M18,6 L13,9" stroke="#0ea5e9" strokeWidth="2" fill="none"/>
-            </svg>
-            <span>Dependency</span>
-        </div>
     </div>
 );
 
@@ -64,7 +55,7 @@ const GanttLegend: React.FC = () => (
 const ProjectCard: React.FC<ProjectCardProps> = (props) => {
   const { 
     project, tasks, comments, activityLog, isSelected, onToggleSelect, onEditProject, onDeleteProject, onToggleArchive, onAddTask,
-    onUpdateTaskStatus, onDeleteTask, onEditTask, onToggleTaskFocus, onAddSubTask, onReorderTasks, onReorderProject, onAddComment
+    onUpdateTaskStatus, onDeleteTask, onEditTask, onToggleTaskFocus, onAddSubTask, onReorderProject, onAddComment
   } = props;
 
   const [isExpanded, setIsExpanded] = useState(true);
@@ -98,12 +89,8 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
         setNewComment('');
     }
   }
-  
-  const generateTooltipHtml = (task: Task, allTasks: Task[]): string => {
-    const deps = task.dependencies
-        .map(depId => allTasks.find(t => t.id === depId)?.title)
-        .filter(Boolean);
 
+  const generateTooltipHtml = (task: Task): string => {
     const startDate = task.startDate ? new Date(task.startDate).toLocaleDateString() : 'N/A';
     const dueDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A';
 
@@ -115,7 +102,6 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
                 <strong style="color: #94a3b8;">Priority:</strong> <span>${task.priority}</span>
                 <strong style="color: #94a3b8;">Dates:</strong> <span>${startDate} - ${dueDate}</span>
             </div>
-            ${deps.length > 0 ? `<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155;"><strong>Blocked By:</strong><ul style="margin: 4px 0 0 0; padding-left: 20px;">${deps.map(d => `<li>${d}</li>`).join('')}</ul></div>` : ''}
         </div>
     `;
   };
@@ -124,7 +110,9 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
       switch(activeTab) {
           case 'Tasks':
             return (
-              <div className="space-y-2">
+              <div 
+                className={`space-y-2 rounded-lg p-2 transition-colors`}
+              >
                 {tasks.length > 0 ? (
                   topLevelTasks
                     .sort((a,b) => (b.isFocused ? 1 : 0) - (a.isFocused ? 1 : 0) || priorityOrder[b.priority] - priorityOrder[a.priority] || a.order - b.order) 
@@ -132,11 +120,11 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
                       <TaskItem 
                         key={task.id} task={task} allProjectTasks={tasks} level={0}
                         onUpdateStatus={onUpdateTaskStatus} onDelete={onDeleteTask} onEdit={onEditTask}
-                        onToggleFocus={onToggleTaskFocus} onAddSubTask={onAddSubTask} onDrop={onReorderTasks}
+                        onToggleFocus={onToggleTaskFocus} onAddSubTask={onAddSubTask}
                       />
                     ))
                 ) : (
-                  <div className="text-center py-6 text-on-surface-secondary">
+                  <div className="text-center py-6 text-on-surface-secondary border-2 border-dashed border-transparent rounded-lg">
                     <p>No tasks yet. Add one to get started!</p>
                   </div>
                 )}
@@ -150,8 +138,6 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
                       if (task.status === TaskStatus.InProgress) percentComplete = 50;
                       else if (task.status === TaskStatus.Done) percentComplete = 100;
                       
-                      const dependencies = task.dependencies.length > 0 ? task.dependencies.join(',') : null;
-
                       return [
                           task.id,
                           task.title,
@@ -160,8 +146,7 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
                           new Date(task.dueDate!),
                           null, // Duration is auto-calculated
                           percentComplete,
-                          dependencies,
-                          generateTooltipHtml(task, tasks)
+                          generateTooltipHtml(task)
                       ];
                   });
 
@@ -177,7 +162,6 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
                   { type: 'date', label: 'End Date' },
                   { type: 'number', label: 'Duration' },
                   { type: 'number', label: 'Percent Complete' },
-                  { type: 'string', label: 'Dependencies' },
                   { type: 'string', role: 'tooltip', p: { html: true } }
               ];
               

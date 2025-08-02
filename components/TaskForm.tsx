@@ -1,13 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Task, TaskStatus, TaskPriority, Project } from '../types';
 
 interface TaskFormProps {
-  onSave: (task: Omit<Task, 'id' | 'projectId' | 'parentId' | 'isFocused' | 'createdAt' | 'order'>) => void;
+  onSave: (
+    taskData: Omit<Task, 'id' | 'projectId' | 'parentId' | 'isFocused' | 'createdAt' | 'order'>,
+    newProjectId: string,
+    newParentId: string | null
+  ) => void;
   taskToEdit?: Task | null;
-  projectTasks: Task[];
+  allProjects: Project[];
+  allTasks: Task[];
+  contextProjectId?: string;
+  contextParentId?: string | null;
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks }) => {
+const getDescendants = (taskId: string, tasks: Task[]): Set<string> => {
+    const descendants = new Set<string>();
+    const queue = [taskId];
+    while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        const children = tasks.filter(t => t.parentId === currentId);
+        for (const child of children) {
+            if (!descendants.has(child.id)) {
+                descendants.add(child.id);
+                queue.push(child.id);
+            }
+        }
+    }
+    return descendants;
+};
+
+
+const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, allProjects, allTasks, contextProjectId, contextParentId }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>(TaskStatus.ToDo);
@@ -15,7 +39,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks })
   const [startDate, setStartDate] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [tags, setTags] = useState('');
-  const [dependencies, setDependencies] = useState<string[]>([]);
+  const [newProjectId, setNewProjectId] = useState<string>('');
+  const [newParentId, setNewParentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (taskToEdit) {
@@ -26,7 +51,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks })
       setStartDate(taskToEdit.startDate ? taskToEdit.startDate.split('T')[0] : '');
       setDueDate(taskToEdit.dueDate ? taskToEdit.dueDate.split('T')[0] : '');
       setTags(taskToEdit.tags.join(', '));
-      setDependencies(taskToEdit.dependencies);
+      setNewProjectId(taskToEdit.projectId);
+      setNewParentId(taskToEdit.parentId);
     } else {
       setTitle('');
       setDescription('');
@@ -35,9 +61,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks })
       setStartDate('');
       setDueDate('');
       setTags('');
-      setDependencies([]);
+      setNewProjectId(contextProjectId || '');
+      setNewParentId(contextParentId || null);
     }
-  }, [taskToEdit]);
+  }, [taskToEdit, contextProjectId, contextParentId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,11 +80,18 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks })
       startDate: startDate ? new Date(startDate).toISOString() : null,
       dueDate: dueDate ? new Date(dueDate).toISOString() : null,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      dependencies
-    });
+    }, newProjectId, newParentId);
   };
 
-  const availableDependencies = projectTasks.filter(t => t.id !== taskToEdit?.id);
+  const possibleParentTasks = useMemo(() => {
+    if (!taskToEdit) return [];
+    const descendants = getDescendants(taskToEdit.id, allTasks);
+    return allTasks.filter(t => 
+        t.projectId === newProjectId && // Must be in the selected project
+        t.id !== taskToEdit.id &&      // Cannot be itself
+        !descendants.has(t.id)         // Cannot be a descendant
+    );
+  }, [taskToEdit, newProjectId, allTasks]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -114,23 +148,27 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks })
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label htmlFor="startDate" className="block text-sm font-medium text-on-surface-secondary mb-1">Start Date</label>
-          <input
-            id="startDate"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-full bg-secondary border border-slate-600 rounded-md px-3 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none"
-          />
+          <div className="relative">
+             <input
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full bg-secondary border border-slate-600 rounded-md pl-3 pr-8 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none appearance-none"
+            />
+          </div>
         </div>
         <div>
           <label htmlFor="dueDate" className="block text-sm font-medium text-on-surface-secondary mb-1">Due Date</label>
-          <input
-            id="dueDate"
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="w-full bg-secondary border border-slate-600 rounded-md px-3 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none"
-          />
+           <div className="relative">
+            <input
+              id="dueDate"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full bg-secondary border border-slate-600 rounded-md pl-3 pr-8 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none appearance-none"
+            />
+          </div>
         </div>
       </div>
        <div>
@@ -145,21 +183,42 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSave, taskToEdit, projectTasks })
         />
         <p className="text-xs text-on-surface-secondary mt-1">Comma-separated values.</p>
       </div>
-       <div>
-        <label htmlFor="dependencies" className="block text-sm font-medium text-on-surface-secondary mb-1">Blocked By</label>
-        <select
-            id="dependencies"
-            multiple
-            value={dependencies}
-            onChange={(e) => setDependencies(Array.from(e.target.selectedOptions, option => option.value))}
-            className="w-full h-32 bg-secondary border border-slate-600 rounded-md px-3 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none"
-        >
-            {availableDependencies.map(task => (
-                <option key={task.id} value={task.id}>{task.title}</option>
-            ))}
-        </select>
-        <p className="text-xs text-on-surface-secondary mt-1">Hold Ctrl/Cmd to select multiple tasks.</p>
-       </div>
+
+      {taskToEdit && (
+        <div className="space-y-4 pt-4 border-t border-slate-700/60">
+            <h3 className="text-lg font-semibold text-on-surface">Move Task</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="moveToProject" className="block text-sm font-medium text-on-surface-secondary mb-1">To Project</label>
+                    <select
+                        id="moveToProject"
+                        value={newProjectId}
+                        onChange={(e) => {
+                            setNewProjectId(e.target.value);
+                            setNewParentId(null); // Reset parent when project changes
+                        }}
+                        className="w-full bg-secondary border border-slate-600 rounded-md px-3 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none"
+                    >
+                        {allProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+                 <div>
+                    <label htmlFor="moveUnderTask" className="block text-sm font-medium text-on-surface-secondary mb-1">Under Task</label>
+                    <select
+                        id="moveUnderTask"
+                        value={newParentId || ''}
+                        onChange={(e) => setNewParentId(e.target.value || null)}
+                        className="w-full bg-secondary border border-slate-600 rounded-md px-3 py-2 text-on-surface focus:ring-2 focus:ring-primary focus:outline-none"
+                    >
+                        <option value="">-- None (Top-level task) --</option>
+                        {possibleParentTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                    </select>
+                </div>
+            </div>
+        </div>
+      )}
+
+
       <div className="flex justify-end pt-2">
         <button
           type="submit"

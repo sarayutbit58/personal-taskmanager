@@ -11,7 +11,6 @@ interface TaskItemProps {
   onEdit: (task: Task) => void;
   onToggleFocus: (taskId: string) => void;
   onAddSubTask: (parentTask: Task) => void;
-  onDrop: (draggedId: string, targetId: string) => void;
 }
 
 const statusColors: Record<TaskStatus, string> = {
@@ -26,9 +25,8 @@ const priorityIcons: Record<TaskPriority, React.ReactNode> = {
     [TaskPriority.Low]: <ArrowDownIcon className="w-4 h-4 text-green-500" />,
 }
 
-const TaskItem: React.FC<TaskItemProps> = ({ task, allProjectTasks, level, onUpdateStatus, onDelete, onEdit, onToggleFocus, onAddSubTask, onDrop }) => {
+const TaskItem: React.FC<TaskItemProps> = ({ task, allProjectTasks, level, onUpdateStatus, onDelete, onEdit, onToggleFocus, onAddSubTask }) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [isDragging, setIsDragging] = useState(false);
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onUpdateStatus(task.id, e.target.value as TaskStatus);
@@ -38,44 +36,12 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, allProjectTasks, level, onUpd
     .sort((a,b) => a.order - b.order);
 
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== TaskStatus.Done;
-  const isBlocked = task.dependencies.some(depId => {
-      const depTask = allProjectTasks.find(t => t.id === depId);
-      return depTask ? depTask.status !== TaskStatus.Done : false;
-  });
-
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData('taskId', task.id);
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => setIsDragging(true), 0);
-  };
-  
-  const handleDragEnd = () => setIsDragging(false);
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const draggedId = e.dataTransfer.getData('taskId');
-    if (draggedId && draggedId !== task.id) {
-      onDrop(draggedId, task.id);
-    }
-    setIsDragging(false);
-  };
-  
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
 
   return (
     <React.Fragment>
       <div 
         id={`task-${task.id}`}
-        draggable
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        className={`group relative bg-secondary rounded-lg flex items-start justify-between transition-all duration-300 ${task.isFocused ? 'shadow-glow ring-2 ring-primary' : ''} ${isDragging ? 'opacity-50 border-dashed border-2 border-primary' : 'hover:bg-slate-600'}`}
+        className={`group relative bg-secondary rounded-lg flex items-start justify-between transition-all duration-300 ${task.isFocused ? 'shadow-glow ring-2 ring-primary' : ''} hover:bg-slate-600`}
         style={{ 
             paddingLeft: `${level * 20 + 8}px`,
             paddingRight: '12px',
@@ -97,9 +63,8 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, allProjectTasks, level, onUpd
           </button>
           <div title={task.priority}>{priorityIcons[task.priority]}</div>
           <div className="flex-1 min-w-0">
-            <p className={`text-on-surface font-medium truncate ${isBlocked ? 'text-slate-500' : ''}`}>{task.title}</p>
+            <p className={`text-on-surface font-medium truncate`}>{task.title}</p>
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-on-surface-secondary flex-wrap mt-1">
-              {isBlocked && <div className="flex items-center gap-1 text-amber-500"><LockClosedIcon className="w-3 h-3" /><span>Blocked</span></div>}
               {task.dueDate && <div className={`flex items-center gap-1 ${isOverdue ? 'text-red-500' : ''}`}><CalendarDaysIcon className="w-3 h-3" /><span>{new Date(task.dueDate).toLocaleDateString()}</span></div>}
               {task.tags.length > 0 && <div className="flex items-center gap-1"><TagIcon className="w-3 h-3" /><span>{task.tags.join(', ')}</span></div>}
             </div>
@@ -111,8 +76,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, allProjectTasks, level, onUpd
             <select
               value={task.status}
               onChange={handleStatusChange}
-              disabled={isBlocked}
-              className={`appearance-none bg-slate-700 border border-slate-600 rounded-md py-1 pl-3 pr-8 text-sm text-on-surface focus:ring-2 focus:ring-primary focus:outline-none ${isBlocked ? 'cursor-not-allowed opacity-60' : ''}`}
+              className={`appearance-none bg-slate-700 border border-slate-600 rounded-md py-1 pl-3 pr-8 text-sm text-on-surface focus:ring-2 focus:ring-primary focus:outline-none`}
             >
               {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -144,7 +108,6 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, allProjectTasks, level, onUpd
                     onEdit={onEdit}
                     onToggleFocus={onToggleFocus}
                     onAddSubTask={onAddSubTask}
-                    onDrop={onDrop}
                 />
             ))}
         </div>

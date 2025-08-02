@@ -15,7 +15,6 @@ interface DashboardProps {
     onEditTask: (task: Task) => void;
     onToggleTaskFocus: (taskId: string) => void;
     onAddSubTask: (parentTask: Task) => void;
-    onReorderTasks: (draggedId: string, targetId: string) => void;
     onReorderProject: (draggedId: string, targetId: string) => void;
     onAddComment: (projectId: string, content: string) => void;
     onBulkDelete: (projectIds: string[]) => void;
