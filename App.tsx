@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { Project, Task, TaskStatus, TaskPriority, AppState, Comment, ActivityLog } from './types';
 import useLocalStorage, { useUndoableState } from './hooks/useLocalStorage';
 import Header from './components/Header';
@@ -6,6 +7,7 @@ import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
 import ProjectForm from './components/ProjectForm';
 import TaskForm from './components/TaskForm';
+import { SaveStatus } from './components/SaveStatusIndicator';
 
 type ModalState = 
   | { type: 'CLOSED' }
@@ -22,7 +24,8 @@ const App: React.FC = () => {
     
     const [modalState, setModalState] = useState<ModalState>({ type: 'CLOSED' });
     const [searchQuery, setSearchQuery] = useState('');
-    
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+
     useEffect(() => {
         const oldState = persistedState as any;
         const needsMigration = !oldState.comments || !oldState.activityLog || oldState.projects.some((p: Project) => p.color === undefined) || oldState.tasks.some((t: Task) => t.startDate === undefined);
@@ -50,11 +53,37 @@ const App: React.FC = () => {
         }
     }, []);
 
+    // Effect for handling auto-saving
     useEffect(() => {
-        if (JSON.stringify(state) !== JSON.stringify(persistedState)) {
-            setPersistedState(state);
+        const hasChanges = JSON.stringify(state) !== JSON.stringify(persistedState);
+        if (hasChanges) {
+            setSaveStatus('saving');
+            const timer = setTimeout(() => {
+                setPersistedState(state);
+            }, 1200); // Debounce saving
+            return () => clearTimeout(timer);
         }
-    }, [state, setPersistedState, persistedState]);
+    }, [state, persistedState, setPersistedState]);
+
+    // Effect for updating the save status indicator
+    useEffect(() => {
+        const hasChanges = JSON.stringify(state) !== JSON.stringify(persistedState);
+        if (saveStatus === 'saving') {
+             if (!hasChanges) {
+                setSaveStatus('saved');
+            }
+        } else if (hasChanges) {
+            setSaveStatus('unsaved');
+        } else {
+            setSaveStatus('saved');
+        }
+    }, [state, persistedState, saveStatus]);
+
+
+    const handleManualSave = () => {
+        setSaveStatus('saving');
+        setPersistedState(state);
+    };
 
     const createActivityLog = (projectId: string, action: string): ActivityLog => ({
         id: `log_${Date.now()}`,
@@ -376,6 +405,8 @@ const App: React.FC = () => {
                 onAddNewProject={() => setModalState({ type: 'CREATE_PROJECT' })} 
                 searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                 undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo}
+                onManualSave={handleManualSave}
+                saveStatus={saveStatus}
             />
             <Dashboard
                 appState={state}

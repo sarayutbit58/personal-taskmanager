@@ -140,3 +140,10 @@ export const UserGroupIcon: React.FC<IconProps> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.962c.57-1.007 1.254-1.932 2.034-2.776m-2.034 2.776a3.75 3.75 0 0 0-4.034 2.776l-1.313.44a1.125 1.125 0 0 1-1.313-.44m4.034-2.776a3.75 3.75 0 0 1 4.034-2.776l1.313-.44c.44-.149.888.066 1.125.44m-4.034 2.776l-1.313.44a1.125 1.125 0 0 0-1.313.44m7.5-2.962 1.313-.44a1.125 1.125 0 0 1 1.313.44m-12.034 0a9.094 9.094 0 0 1 3.741-.479 3 3 0 0 1 4.682-2.72m-4.682 2.72-1.313.44a1.125 1.125 0 0 0-1.313.44" />
     </svg>
 );
+
+export const FloppyDiskIcon: React.FC<IconProps> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V8.25a2.25 2.25 0 0 0-2.25-2.25H15M3 16.5L3 5.25A2.25 2.25 0 0 1 5.25 3h9.75l4.5 4.5v8.25a2.25 2.25 0 0 1-2.25 2.25h-9.75a2.25 2.25 0 0 1-2.25-2.25Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h-6a1.5 1.5 0 0 0-1.5 1.5v5.25a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5V10.5A1.5 1.5 0 0 0 15 9Z" />
+  </svg>
+);

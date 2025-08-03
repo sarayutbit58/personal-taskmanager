@@ -1,8 +1,9 @@
 
 import React, { useRef } from 'react';
 import { Project, Task } from '../types';
-import { UploadIcon, DownloadIcon, StarIcon } from './IconComponents';
+import { UploadIcon, DownloadIcon, StarIcon, FloppyDiskIcon } from './IconComponents';
 import useLocalStorage from '../hooks/useLocalStorage';
+import SaveStatusIndicator, { SaveStatus } from './SaveStatusIndicator';
 
 interface HeaderProps {
   projects: Project[];
@@ -15,9 +16,11 @@ interface HeaderProps {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onManualSave: () => void;
+  saveStatus: SaveStatus;
 }
 
-const Header: React.FC<HeaderProps> = ({ projects, tasks, onImport, onAddNewProject, searchQuery, setSearchQuery, undo, redo, canUndo, canRedo }) => {
+const Header: React.FC<HeaderProps> = ({ projects, tasks, onImport, onAddNewProject, searchQuery, setSearchQuery, undo, redo, canUndo, canRedo, onManualSave, saveStatus }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastBackup, setLastBackup] = useLocalStorage<string | null>('focusflow_last_backup', null);
 
@@ -89,14 +92,26 @@ const Header: React.FC<HeaderProps> = ({ projects, tasks, onImport, onAddNewProj
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
-            <button onClick={undo} disabled={!canUndo} className="p-2 rounded-md hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={undo} disabled={!canUndo} className="p-2 rounded-md hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed" title="Undo">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
             </button>
-            <button onClick={redo} disabled={!canRedo} className="p-2 rounded-md hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={redo} disabled={!canRedo} className="p-2 rounded-md hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed" title="Redo">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m15 15 6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" /></svg>
             </button>
 
             <div className="h-6 border-l border-slate-600 mx-1"></div>
+            
+            <SaveStatusIndicator status={saveStatus} />
+
+            <button
+              onClick={onManualSave}
+              title="Save progress"
+              disabled={saveStatus === 'saved'}
+              className="flex items-center gap-2 bg-secondary hover:bg-slate-600 text-on-surface font-semibold py-2 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FloppyDiskIcon className="w-5 h-5"/>
+              <span className="hidden lg:inline">Save</span>
+            </button>
 
             <div className="group relative">
                 <button
